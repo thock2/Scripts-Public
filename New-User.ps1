@@ -16,7 +16,7 @@ $Password = Read-Host -AsSecureString "Input Password"
 
 # Select a login script
 if ($Office -like "Here" ) {
-   Invoke-Command -computername Some_Server -command { Get-ChildItem C:\Windows\SYSVOL\sysvol\Some_Server\scripts | Select-Object Name }
+   Get-ChildItem \\Some_Server\SYSVOL\your.domain\scripts\ | Select-Object Name | Format-Table -AutoSize
 }
 elseif ($Office -like "There") {
    Invoke-Command -computername 192.168.X.X -Credential "domain admin account" -command { Get-ChildItem C:\Windows\SYSVOL\sysvol\Some_Other_Server\scripts | Select-Object Name }
@@ -45,7 +45,7 @@ function New-LocalAD {
    }
    elseif ($Office -like "There") {
       $Site_Credential = Get-Credential "your_domain\administrator"
-      New-ADUser -Server 192.168.20.10 -Credential $NJ_Credential -Name $DisplayName -DisplayName $DisplayName `
+      New-ADUser -Server 192.168.X.X -Credential $your_domain_credential -Name $DisplayName -DisplayName $DisplayName `
          -GivenName $FirstName -Surname $LastName -SamAccountName $SamAccountName -UserPrincipalName $UPN_AD `
          -Path "OU=YourDomain" -ScriptPath $Script -AccountPassword $Password `
          -PasswordNeverExpires $true -CannotChangePassword $true -Enabled $true
