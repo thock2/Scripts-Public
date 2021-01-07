@@ -1,7 +1,6 @@
 $InformationPreference = 'Continue'
 # Local gets credentials for computer rename later on, 
 # Domain gets credentials for New-PSDrive
-$LocalCredential = Get-Credential -Credential $env:COMPUTERNAME\acadmin
 $DomainCredential = Get-Credential -Credential #Domain Credential
 
 # Set time zone to central because microsoft puts pacific as default for some reason
@@ -10,38 +9,29 @@ Set-TimeZone -Name "Central Standard Time"
 # Ask for Computer name, Rename to specified name, Add to domain
 $ComputerName = Read-Host "What will this computer be named?"
 $DomainName = #Domain Name
-Write-Information "Renaming computer..."; Rename-Computer -NewName "$ComputerName" -LocalCredential $LocalCredential
-Write-Information "Adding $ComputerName to domain..."; Add-Computer -DomainName $DomainName -Credential $DomainCredential -Restart
+Add-Computer -NewName $ComputerName -DomainName $DomainName -DomainCredential $DomainCredential -Verbose
 
 # Connects to share drive for installation of TrendMicro
 New-PSDrive -Name "X" -Root "\\Some_Server\Software" -PSProvider "Filesystem" -Credential $DomainCredential
-# Trendmicro installer and arguments
-$TrendMicro = '\\Some_Server\WFBS-SVC_Agent_Installer.msi'
-$TrendMicro_args = 'IDENTIFIER="Found in TM account" SILENTMODE=1'
+
+# Example of install from share drive
+# $acrobat = '\\Some_Server\Software\AcroRdrDC2001320074_en_US\setup.exe"
+# Start-Process $acrobat "/sAll" -Wait 
 
 ## Install chocolatey: https://chocolatey.org/
 # From: https://chocolatey.org/courses/installation/installing?method=install-from-powershell-v3?quiz=true
 Set-ExecutionPolicy Bypass -Scope Process -Force; Invoke-WebRequest https://chocolatey.org/install.ps1 -UseBasicParsing | Invoke-Expression
 
-choco install 7zip.install googlechrome microsoft-edge zoom teamviewer adobereader office365business -y
+choco install 7zip.install googlechrome zoom teamviewer office365business -y
 
-# TrendMicro Install 
-# Followed this guide:
-# https://docs.trendmicro.com/wfbs-svc/v6.7/en-us/deploy_script_identifier_group/
-Write-Information "Installing TrendMicro..."; Start-Process $TrendMicro $TrendMicro_args -Wait
-
-# Enable WinRM
-# Sets network profile to Private, will fail if not set.
-Write-Information "Enabling WinRM..."
+# Enable WinRM - Sets network profile to Private, will fail if not set.
 $interface = Get-NetConnectionProfile | Select-Object -ExpandProperty InterfaceAlias
-Set-NetConnectionProfile -InterfaceAlias $interface -NetworkCategory Private
-winrm quickconfig -q
+Set-NetConnectionProfile -InterfaceAlias $interface -NetworkCategory Private; winrm quickconfig -q
 
-# Rename Computer
-Write-Information "Renaming Computer..."; Rename-Computer -NewName "$ComputerName" -LocalCredential $LocalCredential
-
-# Install PSWindows Update, Enable updates to be managed remotely
-# Check for and Install available updates, install once done.
-Install-Module -Name PSWindowsUpdate -Force
-Enable-WURemoting
-Install-WindowsUpdate -MicrosoftUpdate -AcceptAll -AutoReboot
+# Install PSWindowsUpdate Module for remote update management
+Install-PackageProvider NuGet -Force; Set-PSRepository PSGallery -InstallationPolicy Trusted
+Install-Module -Name PSWindowsUpdate
+Import-Module PSWindowsUpdate
+#Enables automatic updates
+Add-WUServiceManager -ServiceID "7971f918-a847-4430-9279-4a52d1efe18d" -AddServiceFlag 7 -Confirm:$false
+#Install-WindowsUpdate -MicrosoftUpdate -AcceptAll -AutoReboot -Verbose

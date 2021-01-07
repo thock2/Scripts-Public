@@ -1,5 +1,4 @@
 $InformationPreference = 'Continue'
-
 # Connect to AzureAD
 $Credential = Get-Credential #O365 admin account
 Connect-AzureAD -Credential $Credential
@@ -44,7 +43,7 @@ function New-LocalAD {
          -ScriptPath $Script -AccountPassword $Password -PasswordNeverExpires $true -CannotChangePassword $true -Enabled $true
    }
    elseif ($Office -like "There") {
-      $Site_Credential = Get-Credential "your_domain\administrator"
+      $your_domain_credential = Get-Credential "your_domain\administrator"
       New-ADUser -Server 192.168.X.X -Credential $your_domain_credential -Name $DisplayName -DisplayName $DisplayName `
          -GivenName $FirstName -Surname $LastName -SamAccountName $SamAccountName -UserPrincipalName $UPN_AD `
          -Path "OU=YourDomain" -ScriptPath $Script -AccountPassword $Password `
