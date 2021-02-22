@@ -1,6 +1,6 @@
 <#
 .SYNOPSIS
-Disables a users local AD account, AzureAD account, and removes them from any Teams they are a member of.
+Disables a users local AD account and AzureAD account
 .DESCRIPTION
 You provide the username and location as parameters, and the script will run from there
 .PARAMETER ad_username
@@ -29,7 +29,6 @@ $InformationPreference = 'Continue'
 # Connect to AzureAD and Teams for online accounts
 $AdminCred = Get-Credential #Your admin account
 Connect-AzureAD -Credential $AdminCred
-Connect-MicrosoftTeams -Credential $AdminCred
 
 # Defines username variables (firstname.lastname)
 $azure_ad_username = $ad_username + "@your_domain.com"
@@ -68,20 +67,9 @@ elseif ($user_location -like "Everywhere") {
 # Set AzureAD account to disabled/block sign-in, Sign AzureAD account out of all devices
 Set-AzureADUser -ObjectID $azure_ad_username -AccountEnabled $false; Revoke-AzureADUserAllRefreshToken -ObjectId $azure_ad_username
 
-# Get all teams user is a member of, and remove them from each one based on the GroupID
-$teams = Get-Team -User $azure_ad_username | Select-Object -ExpandProperty GroupID
-$userid = Get-TeamUser -GroupId ($teams | Select-Object -first 1) | Where-Object User -eq $azure_ad_username | Select-Object -ExpandProperty UserId
-foreach ($team in $teams) {
-    Remove-TeamUser -GroupID $team -User $userid
-}
-
 Write-Information "AzureAD/Exchange Status:"
 Get-AzureADUser -ObjectId $azure_ad_username | Select-Object UserPrincipalName, AccountEnabled
-
-Write-Information "Microsoft Teams Status"
-Get-Team -User $azure_ad_username | Select-Object DisplayName, GroupID
 
 Write-Information "Done"
 
 Disconnect-AzureAD
-Disconnect-MicrosoftTeams

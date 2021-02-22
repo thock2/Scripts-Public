@@ -1,17 +1,16 @@
 $InformationPreference = 'Continue'
-# Local gets credentials for computer rename later on, 
-# Domain gets credentials for New-PSDrive
+# Domain gets credentials for New-PSDrive and domain join
 $DomainCredential = Get-Credential -Credential #Domain Credential
 
 # Set time zone to central because microsoft puts pacific as default for some reason
 Set-TimeZone -Name "Central Standard Time"
 
-# Ask for Computer name, Rename to specified name, Add to domain
+# Ask for Computer name, Rename to specified name, Join domain
 $ComputerName = Read-Host "What will this computer be named?"
-$DomainName = #Domain Name
+$DomainName = 'Domain Name'
 Add-Computer -NewName $ComputerName -DomainName $DomainName -DomainCredential $DomainCredential -Verbose
 
-# Connects to share drive for installation of TrendMicro
+# Connects to share drive for access to installers
 New-PSDrive -Name "X" -Root "\\Some_Server\Software" -PSProvider "Filesystem" -Credential $DomainCredential
 
 # Example of install from share drive
@@ -24,9 +23,22 @@ Set-ExecutionPolicy Bypass -Scope Process -Force; Invoke-WebRequest https://choc
 
 choco install 7zip.install googlechrome zoom teamviewer office365business -y
 
-# Enable WinRM - Sets network profile to Private, will fail if not set.
-$interface = Get-NetConnectionProfile | Select-Object -ExpandProperty InterfaceAlias
-Set-NetConnectionProfile -InterfaceAlias $interface -NetworkCategory Private; winrm quickconfig -q
+# Enable WinRM
+# Checks if service is running, if not, identify adapter and change profile to private, enable winrm
+$winrm_status = Get-Service WinRM | Select-Object Status
+if ($winrm_status -eq "Running") {
+    break
+}
+else {
+    $interface = Get-NetConnectionProfile | Select-Object InterfaceAlias, NetworkCategory
+    if ($interface.NetworkCategory -match "DomainAuthenticated" -or $interface.NetworkCategory -match "Private") {
+        winrm quickconfig -q
+    }
+    else {
+        Set-NetConnectionProfile -InterfaceAlias $interface.InterfaceAlias -NetworkCategory Private
+        winrm quickconfig -q
+    }
+}
 
 # Install PSWindowsUpdate Module for remote update management
 Install-PackageProvider NuGet -Force; Set-PSRepository PSGallery -InstallationPolicy Trusted

@@ -1,96 +1,103 @@
-$InformationPreference = 'Continue'
+# This is a rewrite of AD_New_User that can accept input from a CSV file. Because of this it is capable of creating users in bulk. 
+# Additonally it is likely a bit more performant due to re-organization and consolidation of several if and for statements from the original. 
+
+[CmdletBinding()]
+param (
+   [Parameter(ValueFromPipeline = $True,
+      Mandatory = $true)]
+   [Alias('CSV')]
+   [string[]]$user_document
+)
 # Connect to AzureAD
-$Credential = Get-Credential #O365 admin account
+$Credential = Get-Credential "admin@your_domain.onmicrosoft.com"
 Connect-AzureAD -Credential $Credential
 
-# Defining all variables
-# I'd like to work towards having this read a CSV or other type of input instead of prompting
-$FirstName = Read-Host "First Name?" # Kanye
-$LastName = Read-Host "Last Name?" # West
-$Office = Read-Host "Office Location?" # Office Location
-$OU = Read-Host 'Department? (Central_Kitchen, HR, Operations, Production, Sales, WH, Customer_Service, Shared_Accounts)'
-$Department = $OU
-$JobTitle = Read-Host 'Job Title?'
-$Password = Read-Host -AsSecureString "Input Password"
+$user_info = Import-CSV $user_document
 
-# Select a login script
-if ($Office -like "Here" ) {
-   Get-ChildItem \\Some_Server\SYSVOL\your.domain\scripts\ | Select-Object Name | Format-Table -AutoSize
-}
-elseif ($Office -like "There") {
-   Invoke-Command -computername 192.168.X.X -Credential "domain admin account" -command { Get-ChildItem C:\Windows\SYSVOL\sysvol\Some_Other_Server\scripts | Select-Object Name }
-}
+foreach ($user in $user_info) {
+   $DisplayName = $user.first_name + " " + $user.last_name # He Man
+   $SamAccountName = $user.first_name.ToLower() + "." + $user.last_name.ToLower() # he.man
+   $UPN_AZAD = $SamAccountName + "@your_domain.com" # he.man@your_domain.com
+   $Password = Read-Host -AsSecureString "Input Password for $SamAccountName"
 
-$Script = Read-Host 'Please select a login script'
-
-# text manipulation to make the various account names/addresses needed.
-$DisplayName = $FirstName + " " + $LastName # Kanye West
-$SamAccountName = $FirstName.ToLower() + "." + $LastName.ToLower() # kanye.west
-$UPN_AD = $SamAccountName.ToLower() + "@your_domain.local" # kanye.west@yeezus.local
-$UPN_AZAD = $SamAccountName.ToLower() + "@your_domain.com" # kanye.west@yeezus.com
-
-# License Definition (E1)
-$License = New-Object -TypeName Microsoft.Open.AzureAD.Model.AssignedLicense
-$License.SkuId = "18181a46-0d4e-45cd-891e-60aabd171b4e"
-$LicensesToAssign = New-Object -TypeName Microsoft.Open.AzureAD.Model.AssignedLicenses
-$LicensesToAssign.AddLicenses = $License
-
-# Local AD Account Creation
-function New-LocalAD {
-   if ($Office -like "Here") {
-      New-ADUser -Name $DisplayName -DisplayName $DisplayName -GivenName $FirstName -Surname $LastName `
-         -SamAccountName $SamAccountName -UserPrincipalName $UPN_AD -Path "OU=$OU" `
-         -ScriptPath $Script -AccountPassword $Password -PasswordNeverExpires $true -CannotChangePassword $true -Enabled $true
+   if ($user.office -eq "TX") {
+      $server = '192.168.X.X'
+      $DC_Credential = Get-Credential "your_domain\administrator"
+      $UPN_AD = $SamAccountName + "@your_domain.local"
+      if ($user.department -like "Central Kitchen") {
+         $path = "OU=Central_Kitchen,OU=your_domain,DC=your_domain,DC=local"
+         $script = 'kitchen_login.bat'
+      }
+      elseif ($user.department -like "HR") {
+         $path = "OU=HR,OU=your_domain,DC=your_domain,DC=local"
+         $script = 'hr_login.bat'
+      }
+      elseif ($user.department -like "Operations") {
+         $path = "OU=Operations,OU=your_domain,DC=your_domain,DC=local"
+         $script = 'operations_login.bat'
+      }
+      elseif ($user.department -like "Production") {
+         $path = "OU=Production,OU=your_domain,DC=your_domain,DC=local"
+         $script = 'production_login.bat'
+      }
+      elseif ($user.department -like "Sales") {
+         $path = "OU=Sales,OU=your_domain,DC=your_domain,DC=local"
+         $script = 'sales_login.bat'
+      }
+      elseif ($user.department -like "WH") {
+         $path = "OU=WH,OU=your_domain,DC=your_domain,DC=local"
+         $script = 'wh_login.bat'
+      }
+      elseif ($user.department -like "Customer Service") {
+         $path = "OU=Customer_Service,OU=your_domain,DC=your_domain,DC=local"
+         $script = 'csr_login.bat'
+      }
    }
-   elseif ($Office -like "There") {
-      $your_domain_credential = Get-Credential "your_domain\administrator"
-      New-ADUser -Server 192.168.X.X -Credential $your_domain_credential -Name $DisplayName -DisplayName $DisplayName `
-         -GivenName $FirstName -Surname $LastName -SamAccountName $SamAccountName -UserPrincipalName $UPN_AD `
-         -Path "OU=YourDomain" -ScriptPath $Script -AccountPassword $Password `
-         -PasswordNeverExpires $true -CannotChangePassword $true -Enabled $true
+   elseif ($user.office -eq "CA") {
+      $server = '192.168.X.X'
+      $DC_Credential = Get-Credential "your_company\administrator"
+      $UPN_AD = $SamAccountName + "@your_company.local"
+      $path = "OU=your_company,DC=your_companynj,DC=local"
+      $script = 'loginS.bat'
    }
-}
+   elseif ($user.office -eq "NJ") {
+      $server = '192.168.X.X'
+      $DC_Credential = Get-Credential "your_companynj\administrator"
+      $UPN_AD = $SamAccountName + "@your_companynj.local"
+      $path = "OU=your_company,DC=your_companynj,DC=local"
+      $script = 'njwhwdrive.bat'
+   }
+   New-ADUser -Server $server -Credential $DC_Credential -Name $DisplayName -DisplayName $DisplayName -GivenName $user.first_name `
+      -Surname $user.last_name -SamAccountName $SamAccountName -UserPrincipalName $UPN_AD -Path $path -ScriptPath $Script `
+      -AccountPassword $password -PasswordNeverExpires $true -CannotChangePassword $true -Enabled $true
+   
+   # License Definition (E1)
+   # https://www.microsoft.com/en-us/microsoft-365/enterprise/office-365-e1?activetab=pivot%3aoverviewtab
+   $License = New-Object -TypeName Microsoft.Open.AzureAD.Model.AssignedLicense
+   $License.SkuId = "18181a46-0d4e-45cd-891e-60aabd171b4e"
+   $LicensesToAssign = New-Object -TypeName Microsoft.Open.AzureAD.Model.AssignedLicenses
+   $LicensesToAssign.AddLicenses = $License
 
-New-LocalAD
-
-# Password Creation for AzureAD (Not working atm, it passes an empty value as the password which means user can't login)
-$PasswordProfile = New-Object -TypeName Microsoft.Open.AzureAD.Model.PasswordProfile
-$PasswordProfile.Password = $Password
-$PasswordProfile.EnforceChangePasswordPolicy = $false
-$PasswordProfile.ForceChangePasswordNextLogin = $false
-
-# AzureAD Account Creation
-function New-AzureAD {
+   # Password Creation for AzureAD (Not working atm, it passes an empty value as the password which means user can't login - still working on)
+   $PasswordProfile = New-Object -TypeName Microsoft.Open.AzureAD.Model.PasswordProfile
+   $PasswordProfile.Password = $Password
+   $PasswordProfile.EnforceChangePasswordPolicy = $false
+   $PasswordProfile.ForceChangePasswordNextLogin = $false
+   
+   # AzureAD Account Creation
    New-AzureADUser -DisplayName $DisplayName -PasswordProfile $PasswordProfile -UserPrincipalName $UPN_AZAD `
-      -AccountEnabled $true -PhysicalDeliveryOfficeName $Office -JobTitle $JobTitle -Department $Department `
-      -MailNickName $SamAccountName -GivenName $FirstName -Surname $LastName -UsageLocation US
-}
+      -AccountEnabled $true -PhysicalDeliveryOfficeName $user.office -JobTitle $user.job_title -Department $user.department `
+      -MailNickName $SamAccountName -GivenName $user.first_name -Surname $user.last_name -UsageLocation US
+   
+   # Set Password and License (O365 E1)
+   Set-AzureADUserPassword -ObjectId (Get-AzureADUser -ObjectId $UPN_AZAD | Select-Object -ExpandProperty ObjectID ) -Password $Password
+   Set-AzureADUserLicense -ObjectId $UPN_AZAD -AssignedLicenses $LicensesToAssign
 
-New-AzureAD
-
-# Temporary until I can figure out why the PasswordProfile is passing an empty variable, which as a result won't let someone login
-Set-AzureADUserPassword -ObjectId (Get-AzureADUser -ObjectId $UPN_AZAD | Select-Object -ExpandProperty ObjectID ) -Password $Password
-
-# License Assignment
-#  Set-AzureADUSer -ObjectId $UPN_AZAD -UsageLocation USA
-Set-AzureADUserLicense -ObjectId $UPN_AZAD -AssignedLicenses $LicensesToAssign
-
-# Verification
-function Get-Verification {
-   if ($Office -like "Here") {
-      Write-Output "Local AD Account:"
-      Get-ADUser $SamAccountName
-   }
-   elseif ($Office -like "There") {
-      Write-Output "Local AD Account:"
-      Get-ADUser -Server 192.168.X.X -Credential $NJ_Credential $SamAccountName
-   }
-   Write-Output "Online Account:"
+   # Verify User was created
+   Write-Output "Local AD Account Created:"
+   Get-ADUser -Server $server -Credential $DC_Credential -Identity $SamAccountName | Select-Object Name, SamAccountName, DistinguishedName
+   Write-Output "Azure AD Account Created:"
    Get-AzureADUser -ObjectId $UPN_AZAD | Select-Object DisplayName, UserPrincipalName, UsageLocation, JobTitle
-   Get-AzureADUser -ObjectId $UPN_AZAD | Select-Object -ExpandProperty AssignedLicenses
 }
 
-
-Get-Verification | Out-File \\Some_Server\Logs\$SamAccountName.txt
-
-Disconnect-AzureAD
+Disconnect-AzureAD -Confirm:$false
