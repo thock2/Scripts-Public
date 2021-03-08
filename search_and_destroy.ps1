@@ -18,7 +18,7 @@ Write-Host "Waiting 5 minutes to allow the Search to complete. Please do not clo
 Start-Sleep -Seconds 300
 
 $purge_name = $search_name + "_Purge"
-New-ComplianceSearchAction -SearchName $search_name -Purge -PurgeType HardDelete
+New-ComplianceSearchAction -SearchName $purge_name -Purge -PurgeType HardDelete
 
 #Show Progress of Search/Delete Action
 Get-ComplianceSearchAction -Identity $purge_name -Details
