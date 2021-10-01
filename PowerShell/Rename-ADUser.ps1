@@ -9,6 +9,4 @@ param (
     [string]$ad_new_username
 )
 
-Get-ADUSer $ad_username | Rename-ADObject -NewName $ad_new_username
-
-Get-ADUSer -Filter * | Where-Object Name -Like $ad_new_username
+Rename-ADObject -identity (Get-ADUSer $ad_username).ObjectGUID -NewName $ad_new_username

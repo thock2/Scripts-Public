@@ -5,5 +5,5 @@ if ($disk_status.VolumeStatus -eq "FullyEncrypted") {
     Write-Output "Already Encrypted"
 }else {
     Enable-Bitlocker -MountPoint c: -SkipHardwareTest -RecoveryPasswordProtector
-    Write-Output "Not Encrypted"
+    Write-Output "Encrypting...."
 }
