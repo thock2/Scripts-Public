@@ -9,14 +9,9 @@ param (
     [string[]]$user_name
 )
 
-$Credential = Get-Credential "your_domain@domain.com"
-Connect-ExchangeOnline -Credential $Credential -ShowProgress $true
-
-ForEach ( $user in $user_name) {
-    $email = $user + "@domain.com"
-    Remove-DistributionGroupMember -Identity $group_name -Member $email
+Connect-ExchangeOnline 
+foreach ( $user in $user_name ) {
+    Remove-DistributionGroupMember -Identity $group_name -Member $user_name
 }
 
-Get-DistributionGroupMember -Identity $group_name | Select-Object Name, PrimarySmtpAddress
-
-Disconnect-ExchangeOnline
+Disconnect-ExchangeOnline -Confirm:$false

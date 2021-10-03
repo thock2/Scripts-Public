@@ -8,8 +8,7 @@ param (
 # From https://docs.microsoft.com/en-us/microsoft-365/compliance/search-for-and-delete-messages-in-your-organization?view=o365-worldwide
 # Modified to use sender's address instead of subject line content, and also to process multiple addresseses at a time
 
-#Install-Module -Name ExchangeOnlineManagement
-#Import-Module ExchangeOnlineManagement
+Import-Module ExchangeOnlineManagement
 
 Connect-IPPSSession
 

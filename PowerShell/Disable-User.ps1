@@ -55,10 +55,7 @@ foreach ($user in $ad_username) {
     }
     Set-AzureADUser -ObjectId $azure_user.objectid -AccountEnabled $false; Revoke-AzureADUserAllRefreshToken -ObjectId $azure_user.objectid     # Disable AzureAD Account, Revoke all Siginins
     if ($delete -eq "y") {
-        Remove-AzureADUser -ObjectID $azure_user.objectid #Delete User. This should also free the license
-        #$forward = Read-Host "Who to transfer ownership to?"
-        #Add-MailboxPermission -Identity $ad_user.UserPrincipalName -User $forward -AccessRights FullAccess -InheritanceType All
-        #Set-Mailbox -Identity $ad_user.UserPrincipalName -Type Shared
+        Remove-AzureADUser -ObjectID $azure_user.objectid
     }
     else {
         break
@@ -66,4 +63,3 @@ foreach ($user in $ad_username) {
 }
 Invoke-Command -ComputerName (Read-Host "Input Name of Server hosting AzureAD Sync") -ScriptBlock { Start-ADSyncSyncCycle -PolicyType Delta }
 Disconnect-AzureAD
-#Disconnect-ExchangeOnline -Confirm:$False

@@ -34,7 +34,6 @@ function enable-winrm {
 
 function Enable-Bitlocker {
     #Enable Bitlocker
-    # Add a check for a TPM with Get-TPM
     $disk_status = Get-BitlockerVolume $credential | Where-Object VolumeType -eq "OperatingSystem"
 
     if ($disk_status.VolumeStatus -eq "FullyEncrypted") {
