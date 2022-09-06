@@ -24,7 +24,7 @@ param (
     [string]$user_document
 )
 #permissions needed to make new user?
-Connect-MgGraph -Scopes
+Connect-MgGraph -Scopes 
 
 #how are we creating the password?
 function azure_password {
