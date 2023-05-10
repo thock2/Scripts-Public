@@ -33,7 +33,9 @@ Provide the filepath of the CSV containing the necessary fields
         [switch]$sync
     )
 
-    BEGIN {}
+    BEGIN {
+        Import-Module -Name ActiveDirectory
+    }
     
     PROCESS {
         #Import CSV file
@@ -90,4 +92,481 @@ Provide the filepath of the CSV containing the necessary fields
     }
 
     END {}
+}
+function Disable-ADAccount {
+    <#
+    .SYNOPSIS
+    Disables a specified Active Directory User
+
+    .DESCRIPTION
+    This script will do the following:
+    1. Read the username provided to the username parameter
+    2. Disable the user
+    3. Set the manager property to null
+
+    .PARAMETER username
+    Provide the username of the user you would like to disable
+
+    .EXAMPLE
+    Disable-ADAccount -username mjackson
+    #>
+    [CmdletBinding()]
+    param (
+        [Parameter(Mandatory = $true, ValueFromPipeline = $true, ValueFromPipelineByPropertyName)]
+        [Microsoft.ActiveDirectory.Management.ADUser]
+        $username
+    )
+    Set-ADUser -Identity $username -Enabled $false -Manager $null
+}
+function Get-GroupMemberships {
+    [CmdletBinding()]
+    param (
+        [Parameter(Mandatory = $true, ValueFromPipeline = $true, ValueFromPipelineByPropertyName)]
+        [Microsoft.ActiveDirectory.Management.ADUser]
+        $username
+    )
+
+    Begin {
+        Import-Module -Name ActiveDirectory
+    }
+
+    Process {
+        Get-ADPrincipalGroupMembership -Identity $username | Select-Object -Property Name, DistinguishedName, GroupCategory | Sort-Object -Property GroupCategory
+    }
+
+    End {}
+}
+
+function Remove-ADGroupMembership {
+    [CmdletBinding()]
+    param (
+        [Parameter(Mandatory = $true, ValueFromPipeline = $true, ValueFromPipelineByPropertyName)]
+        [String][Microsoft.ActiveDirectory.Management.ADUser]
+        $username
+    )
+
+    BEGIN {}
+
+    PROCESS {
+        $groups = Get-ADUSer -Identity $username -Properties memberOf | Select-Object -ExpandProperty memberOf
+        foreach ($group in $groups) {
+            Remove-ADGroupMember -Identity $group -Members $username -Confirm:$false
+        }
+    }
+    END {}
+}
+function Disable-AzureAccount {
+    [CmdletBinding()]
+    param (
+        [Parameter(Mandatory = $true, ValueFromPipeline = $true)]
+        [string]
+        $username
+    )
+
+    BEGIN {
+        Import-Module -Name Microsoft.Graph.Authentication
+        Connect-MgGraph -Scopes "User.ReadWrite.All", "Group.ReadWrite.All"
+        Select-MgProfile -Name beta
+    }
+
+    PROCESS {
+        $uri_01 = "https://graph.microsoft.com/beta/users/$username/InvalidateAllRefreshTokens"
+        Invoke-GraphRequest -Method POST -Uri $uri_01
+        $body = @"
+    {
+        "accountEnabled": false
+    }
+    {
+        "showInAddressList": false
+    }
+"@
+        $uri_02 = "https://graph.microsoft.com/beta/users/$username" 
+        Invoke-GraphRequest -Method Patch -Uri $uri_02 -Body $body -ContentType application/json
+    }
+    END {}
+}
+function Remove-AzureGroupMembership {
+    [CmdletBinding()]
+    Param(
+        [Parameter(Mandatory = $true, ValueFromPipeline = $true)]
+        [string[]]
+        $username
+    )
+    BEGIN {
+        Import-Module -Name Microsoft.Graph.Authentication
+        Connect-MgGraph -Scopes "User.ReadWrite.All", "Group.ReadWrite.All"
+        Select-MgProfile -name beta
+    }
+
+    PROCESS {
+        #get user id
+        $user_uri = "https://graph.microsoft.com/beta/users/$username"
+        $user_request = Invoke-GraphRequest -Method Get -Uri $user_uri -ContentType application/json
+        #get group membership
+        $group_uri = "https://graph.microsoft.com/beta/users/$username/memberOf"
+        $groups = Invoke-GraphRequest -Method Get -Uri $group_uri -ContentType application/json
+        $ref = '$ref'
+        #for each group id in group collection, issue delete request to remove user from that group
+        foreach ($group in $groups.value) {
+            if ($group.GroupTypes -eq "DynamicMembership" -or $group.OnPremisesSyncEnabled -eq $true -or $group.MailEnabled -eq $true) {
+                Write-Information "Group Membership cannot be changed. Skipping $($group.DisplayName)."
+            }
+            else {
+                $remove_uri = "https://graph.microsoft.com/beta/groups/$($group.id)/members/$($user_request.id)/$ref"
+                Invoke-GraphRequest -Method DELETE -uri $remove_uri
+            }
+        }
+    }
+    END {}
+
+}
+
+function Add-Licenses {
+    [CmdletBinding()]
+    param (
+        [Parameter(Mandatory = $true)]
+        [String[]]
+        $email_address,
+
+        [Parameter()]
+        [switch]
+        $E3,
+
+        [Parameter()]
+        [switch]
+        $365Essentials,
+
+        [Parameter()]
+        [switch]
+        $BCTeamMember
+    )
+
+    Begin {
+        Import-Module -Name Microsoft.Graph.Authentication, Microsoft.Graph.Users, Microsoft.Graph.Identity.DirectoryManagement
+        Connect-MgGraph -Scopes "User.ReadWrite.All, Organization.Read.All"
+        Select-MgProfile -Name beta
+    }
+
+    Process {
+
+        foreach ($user in $email_address) {
+            #Define UserID
+            $userID = (Get-MgUser -Filter "mail eq '$user'").Id
+            # Set Usage Location
+            Update-MGUser -UserId $userID -UsageLocation US
+            #Assign E3
+            if ($E3) {
+                #Define SkuID
+                $E3SKU = Get-MgSubscribedSku -All | Where-Object { $_.SkuPartNumber -eq "ENTERPRISEPACK" }
+
+                #Assign License, If none available, throw error
+                Try {
+                    Set-MgUserLicense -UserId $userID -AddLicenses @{SkuID = $E3SKU.SkuId } -RemoveLicenses @() -ErrorAction Stop
+                }
+                Catch {
+                    Write-Information "No Remaining Licenses available for $($E3SKU.SkuPartNumber)" -InformationAction Continue
+                }
+            }
+            #Assign M365 Business Essentials
+            if ($365Essentials) {
+                $essential_sku = Get-MgSubscribedSku -All | Where-Object { $_.SkuPartNumber -eq "O365_BUSINESS_ESSENTIALS" }
+
+                Try {
+                    Set-MgUserLicense -UserId $userID -AddLicenses @{SkuID = $essential_sku.SkuId } -RemoveLicenses @() -ErrorAction Stop
+                }
+                Catch {
+                    Write-Information "No Remaining Licenses available for $($essential_sku.SkuPartNumber)" -InformationAction Continue
+                }
+            }
+            # Assign NAV BC Essentials
+            if ($BCEssentials) {
+                $bc_essential_sku = Get-MgSubscribedSku -All | Where-Object { $_.SkuPartNumber -eq "DYN365_BUSCENTRAL_ESSENTIAL" }
+
+                Try {
+                    Set-MgUserLicense -UserId $userID -AddLicenses @{SkuID = $bc_essential_sku.SkuId } -RemoveLicenses @() -ErrorAction Stop
+                }
+                Catch {
+                    Write-Information "No Remaining Licenses available for $($bc_essential_sku.SkuPartNumber)" -InformationAction Continue
+                }
+            }
+            # Assign NAV BC Team Member
+            if ($BCTeamMember) {
+                $bc_team_sku = Get-MgSubscribedSku -All | Where-Object { $_.SkuPartNumber -eq "DYN365_BUSCENTRAL_TEAM_MEMBER" }
+
+                Try {
+                    Set-MgUserLicense -UserId $userID -AddLicenses @{SkuID = $bc_team_sku.SkuId } -RemoveLicenses @() -ErrorAction Stop
+                }
+                Catch {
+                    Write-Information "No Remaining Licenses available for $($bc_team_sku.SkuPartNumber)" -InformationAction Continue
+                }
+            }
+        }
+
+    }
+    End {
+        #Get-MgUserLicenseDetail -UserId $userID
+    }
+}
+function Remove-Licenses {
+    [CmdletBinding()]
+    param (
+        [Parameter()]
+        [String]
+        $username
+    )
+
+    Begin {
+        Import-Module -Name Microsoft.Graph.Authentication, Microsoft.Graph.Users.Actions
+        Connect-MgGraph -Scopes "User.ReadWrite.All, Organization.Read.All"
+        Select-MgProfile -Name beta
+    }
+
+    Process {
+        foreach ($license in $skuID) {
+            $user_uri = "https://graph.microsoft.com/beta/users/$username"
+            $user_request = Invoke-GraphRequest -Method GET -Uri $user_uri -ContentType application/json
+            [Array]$skuID = $user_request.assignedLicenses.SkuID
+            Set-MgUserLicense -UserId $username -RemoveLicenses $license -AddLicenses @()
+        }
+    }
+    End {}
+}
+# Generate Password
+## Adapted From https://stackoverflow.com/questions/37256154/powershell-password-generator-how-to-always-include-number-in-string
+function New-Password {
+    $MinimumPasswordLength = 12
+    $MaximumPasswordLength = 16
+    $PasswordLength = Get-Random -InputObject ($MinimumPasswordLength..$MaximumPasswordLength)
+    $AllowedPasswordCharacters = [char[]]'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!?@#$%^&'
+    $Regex = "(?=.*\d)(?=.*[a-z])(?=.*[A-Z])(?=.*\W)"
+
+    do {
+        $Password = ([string]($AllowedPasswordCharacters |
+                Get-Random -Count $PasswordLength) -replace ' ')
+    }    until ($Password -cmatch $Regex)
+
+    $Password
+}
+function Reset-Password {
+    [CmdletBinding()]
+    param (
+        [Parameter(Mandatory = $true, ValueFromPipeline = $true, ValueFromPipelineByPropertyName)]
+        [string][Microsoft.ActiveDirectory.Management.ADUser]
+        $user
+    )
+
+    BEGIN {
+        Import-Module ActiveDirectory
+    }
+
+    PROCESS {
+        $password = New-Password
+        Set-ADAccountPassword -Identity $user -NewPassword (ConvertTo-SecureString -Asplaintext $password -Force)
+        Write-Output "Password for $user reset to $password"
+    }
+    END {}
+}
+function Get-StaleUsers {
+    [CmdletBinding()]
+    param (
+        [Parameter()]
+        [int]
+        $lastlogindate
+    )
+
+    Begin {
+        Import-Module -Name ActiveDirectory
+    }
+
+    Process {
+        Write-Output "The following Users Have not logged in within the last $($lastlogindate) Days: "
+        Get-ADUser -Filter { Enabled -eq $true } -Properties LastLogonDate | Where-Object { $_.LastLogonDate -le (Get-Date).AddDays(-$lastlogindate) } | `
+            Select-Object Name, LastLogonDate, DistinguishedName | Sort-Object LastLogonDate
+    }
+
+    END {}
+}
+function Get-StaleComps {
+    [CmdletBinding()]
+    param (
+        [Parameter()]
+        [int]
+        $lastlogindate
+    )
+
+    Begin {
+        Import-Module ActiveDirectory
+    }
+
+    Process {
+        Write-Output "The following Computers Have not logged in within the last $($lastlogindate) Days: "
+        Get-ADComputer -Filter { Enabled -eq $true } -Properties LastLogonDate | Where-Object { $_.LastLogonDate -le (Get-Date).AddDays(-$lastlogindate) } | `
+            Select-Object Name, LastLogonDate, DistinguishedName | Sort-Object LastLogonDate
+    }
+
+    END {}
+}
+function New-SharedMailbox {
+    [CmdletBinding()]
+    param (
+        [Parameter(Mandatory = $true)]
+        [String]
+        $mailboxaddress,
+        [Parameter(Mandatory = $true)]
+        [String]
+        $DisplayName
+    )
+
+    Begin {
+        Import-Module -Name ExchangeOnlineManagement
+        $session = Get-PSSession | Where-Object -Property ConfigurationName -eq "Microsoft.Exchange"
+        if ($session.State -eq "Opened") {
+            Write-Information "Exchange Online Session Detected, skipping connect phase"
+        }
+        else {
+            Connect-ExchangeOnline
+        }
+    }
+
+    Process {
+        New-Mailbox -Name $mailboxaddress -DisplayName $DisplayName -PrimarySmtpAddress $mailboxaddress -Shared
+    }
+
+    End {}
+}
+function Convertto-SharedMailbox {
+    [CmdletBinding()]
+    param (
+        [Parameter(Mandatory = $true)]
+        [String[]]
+        $UserPrincipalName
+    )
+
+    Begin {
+        Import-Module ExchangeOnlineManagement
+        $session = Get-PSSession | Where-Object -Property ConfigurationName -eq "Microsoft.Exchange"
+        if ($session.State -eq "Opened") {
+            Write-Information "Exchange Online Session Detected, skipping connect phase"
+        }
+        else {
+            Connect-ExchangeOnline
+        }
+    }
+
+    Process {
+        $UserPrincipalName | ForEach-Object -Process { Set-Mailbox -Identity $_ -Type Shared }
+    }
+
+    End {}
+}
+function Add-SharedMailboxPermission {
+    [CmdletBinding()]
+    param (
+        [Parameter(Mandatory = $true)]
+        [String]
+        $MailboxAddress,
+
+        [Parameter(Mandatory = $true)]
+        [string[]]
+        $RecipientAddress,
+
+        [Parameter()]
+        [Alias('FullAccess')]
+        [switch]$fullaccess_permission,
+
+
+        [Parameter()]
+        [Alias('SendAs')]
+        [switch]$send_permission,
+
+        [Parameter()]
+        [Alias('SendOnBehalf')]
+        [switch]$send_on_behalf_permission
+    )
+
+    BEGIN {
+        Import-Module -Name ExchangeOnlineManagement
+        $session = Get-PSSession | Where-Object -Property ConfigurationName -eq "Microsoft.Exchange"
+        if ($session.State -eq "Opened") {
+            Write-Information "Exchange Online Session Detected, skipping connect phase"
+        }
+        else {
+            Connect-ExchangeOnline
+        }
+    }
+
+    Process {
+        if ($fullaccess_permission) {
+            $RecipientAddress | ForEach-Object {
+                Add-MailboxPermission -Identity $MailboxAddress -User $_ -AccessRights FullAccess -InheritanceType All
+            }
+        }
+
+        if ($send_permission) {
+            $RecipientAddress | ForEach-Object {
+                Add-RecipientPermission -Identity $MailboxAddress -Trustee $_ -AccessRights SendAs -Confirm:$false
+            }
+        }
+        
+        if ($send_on_behalf_permission) {
+            $RecipientAddress | ForEach-Object {
+                Set-Mailbox -Identity $MailboxAddress -GrantSendOnBehalfTo @{Add = "$_" }
+            }
+        }
+    }
+
+    End {}
+}
+function Set-MailboxForwarding {
+    [CmdletBinding()]
+    param (
+        # Target Address
+        [Parameter()]
+        [String]
+        $email_address,
+        # Recipient Address
+        [Parameter(Mandatory = $true)]
+        [String]
+        $recipient_address
+    ) 
+
+    Begin {
+        Import-Module -Name ExchangeOnlineManagement
+        $session = Get-PSSession | Where-Object -Property ConfigurationName -eq "Microsoft.Exchange"
+        if ($session.State -eq "Opened") {
+            Write-Information "Exchange Online Session Detected, skipping connect phase"
+        }
+        else {
+            Connect-ExchangeOnline
+        }
+    }
+
+    Process {
+        Set-Mailbox -Identity $email_address -DeliverToMailboxAndForward $true -ForwardingSMTPAddress $recipient_address
+    }
+
+    End {}
+    
+}
+
+function Get-BitlockerRecoveryKey {
+    [CmdletBinding()]
+    param (
+        [Parameter(Mandatory = $true, ValueFromPipeline = $true)]
+        [Microsoft.ActiveDirectory.Management.ADComputer]
+        $ComputerName
+    ) 
+
+    BEGIN {
+        Import-Module -Name ActiveDirectory
+    }
+
+    Process {
+        $computer = Get-ADComputer -Identity $ComputerName
+        $bitlocker_key = Get-ADObject -Filter { ObjectClass -eq 'msFVE-RecoveryInformation' } -SearchBase $computer.DistinguishedName -Properties 'msFVE-RecoveryPassword'
+        $results = New-Object -TypeName psobject -Property @{'ComputerName' = $computer.name; 'Recovery Key' = $bitlocker_key.'msFVE-RecoveryPassword' }
+    }
+    End {
+        $results
+    }
 }
