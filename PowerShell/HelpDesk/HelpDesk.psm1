@@ -93,6 +93,57 @@ Provide the filepath of the CSV containing the necessary fields
 
     END {}
 }
+
+function New-AzureUser {
+    [CmdletBinding()]
+    param (
+        [Parameter(Mandatory = $true)]
+        [Alias('ImportFile')]
+        [string]$csv
+    )
+
+    BEGIN {
+        Import-Module -Name Microsoft.Graph.Authentication, Microsoft.Graph.Users
+        Connect-MgGraph -Scopes "User.ReadWrite.All", "Directory.ReadWrite.All"
+        Select-MgProfile -Name beta
+        $userdoc = Import-CSV -Path $csv
+    }
+
+    PROCESS {
+
+        foreach ($user in $userdoc) {
+            # Create password object
+            $PasswordProfile = @{
+                Password = New-Password
+            }
+            # Create DisplayName
+            $DisplayName = $user.first_name + " " + $user.last_name
+            # Create Username
+            $mailnickname = $user.first_name.ToLower()[0] + $user.last_name.ToLower()
+            # Properties table
+            $argtable = @{
+                "DisplayName"       = $DisplayName
+                "PasswordProfile"   = $PasswordProfile
+                "UserPrincipalName" = $user.email
+                "AccountEnabled"    = $true
+                "JobTitle"          = $user.job_title
+                "Department"        = $user.department
+                "GivenName"         = $user.last_name
+                "Surname"           = $user.first_name
+                "MailNickName"      = $mailnickname
+                "UsageLocation"     = 'US'
+            }
+            try {
+                New-MgUser @argtable
+            }
+            catch {
+                Write-Output "Unable to create $($DisplayName)"
+            }
+        }
+    }
+
+    END {}
+}
 function Disable-ADAccount {
     <#
     .SYNOPSIS
@@ -159,7 +210,7 @@ function Disable-AzureAccount {
     [CmdletBinding()]
     param (
         [Parameter(Mandatory = $true, ValueFromPipeline = $true)]
-        [string]
+        [string[]]
         $username
     )
 
@@ -170,9 +221,10 @@ function Disable-AzureAccount {
     }
 
     PROCESS {
-        $uri_01 = "https://graph.microsoft.com/beta/users/$username/InvalidateAllRefreshTokens"
-        Invoke-GraphRequest -Method POST -Uri $uri_01
-        $body = @"
+        foreach ($user in $username) {
+            $uri_01 = "https://graph.microsoft.com/beta/users/$user/InvalidateAllRefreshTokens"
+            Invoke-GraphRequest -Method POST -Uri $uri_01
+            $body = @"
     {
         "accountEnabled": false
     }
@@ -180,8 +232,9 @@ function Disable-AzureAccount {
         "showInAddressList": false
     }
 "@
-        $uri_02 = "https://graph.microsoft.com/beta/users/$username" 
-        Invoke-GraphRequest -Method Patch -Uri $uri_02 -Body $body -ContentType application/json
+            $uri_02 = "https://graph.microsoft.com/beta/users/$user" 
+            Invoke-GraphRequest -Method Patch -Uri $uri_02 -Body $body -ContentType application/json
+        }
     }
     END {}
 }
@@ -199,21 +252,23 @@ function Remove-AzureGroupMembership {
     }
 
     PROCESS {
-        #get user id
-        $user_uri = "https://graph.microsoft.com/beta/users/$username"
-        $user_request = Invoke-GraphRequest -Method Get -Uri $user_uri -ContentType application/json
-        #get group membership
-        $group_uri = "https://graph.microsoft.com/beta/users/$username/memberOf"
-        $groups = Invoke-GraphRequest -Method Get -Uri $group_uri -ContentType application/json
-        $ref = '$ref'
-        #for each group id in group collection, issue delete request to remove user from that group
-        foreach ($group in $groups.value) {
-            if ($group.GroupTypes -eq "DynamicMembership" -or $group.OnPremisesSyncEnabled -eq $true -or $group.MailEnabled -eq $true) {
-                Write-Information "Group Membership cannot be changed. Skipping $($group.DisplayName)."
-            }
-            else {
-                $remove_uri = "https://graph.microsoft.com/beta/groups/$($group.id)/members/$($user_request.id)/$ref"
-                Invoke-GraphRequest -Method DELETE -uri $remove_uri
+        foreach ($user in $username) {
+            #get user id
+            $user_uri = "https://graph.microsoft.com/beta/users/$user"
+            $user_request = Invoke-GraphRequest -Method Get -Uri $user_uri -ContentType application/json
+            #get group membership
+            $group_uri = "https://graph.microsoft.com/beta/users/$user/memberOf"
+            $groups = Invoke-GraphRequest -Method Get -Uri $group_uri -ContentType application/json
+            $ref = '$ref'
+            #for each group id in group collection, issue delete request to remove user from that group
+            foreach ($group in $groups.value) {
+                if ($group.GroupTypes -eq "DynamicMembership" -or $group.OnPremisesSyncEnabled -eq $true -or $group.MailEnabled -eq $true) {
+                    Write-Information "Group Membership cannot be changed. Skipping $($group.DisplayName)."
+                }
+                else {
+                    $remove_uri = "https://graph.microsoft.com/beta/groups/$($group.id)/members/$($user_request.id)/$ref"
+                    Invoke-GraphRequest -Method DELETE -uri $remove_uri
+                }
             }
         }
     }
@@ -278,17 +333,6 @@ function Add-Licenses {
                     Write-Information "No Remaining Licenses available for $($essential_sku.SkuPartNumber)" -InformationAction Continue
                 }
             }
-            # Assign NAV BC Essentials
-            if ($BCEssentials) {
-                $bc_essential_sku = Get-MgSubscribedSku -All | Where-Object { $_.SkuPartNumber -eq "DYN365_BUSCENTRAL_ESSENTIAL" }
-
-                Try {
-                    Set-MgUserLicense -UserId $userID -AddLicenses @{SkuID = $bc_essential_sku.SkuId } -RemoveLicenses @() -ErrorAction Stop
-                }
-                Catch {
-                    Write-Information "No Remaining Licenses available for $($bc_essential_sku.SkuPartNumber)" -InformationAction Continue
-                }
-            }
             # Assign NAV BC Team Member
             if ($BCTeamMember) {
                 $bc_team_sku = Get-MgSubscribedSku -All | Where-Object { $_.SkuPartNumber -eq "DYN365_BUSCENTRAL_TEAM_MEMBER" }
@@ -351,7 +395,7 @@ function Reset-Password {
     [CmdletBinding()]
     param (
         [Parameter(Mandatory = $true, ValueFromPipeline = $true, ValueFromPipelineByPropertyName)]
-        [string][Microsoft.ActiveDirectory.Management.ADUser]
+        [Microsoft.ActiveDirectory.Management.ADUser]
         $user
     )
 
