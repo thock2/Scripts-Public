@@ -1,39 +1,58 @@
 ---
 - name: Setup Ubuntu Unifi Controller
-  hosts: testing
+  hosts: 127.0.0.1
+  connection: local
   become: yes
   become_method: sudo
 
   tasks:
-    - name: Upgrade repos / Install Updates
-      apt:
-        update_cache: yes
-        upgrade: 'yes'
+    - name: Update repos
+      ansible.builtin.apt:
+        update_cache: true
+        cache_valid_time: 3600
 
     - name: Install Needed Packages
-      apt:
+      ansible.builtin.apt:
         pkg:
-        - xe-guest-utilities
         - ca-certificates
         - apt-transport-https
-        - openjdk-8-jre-headless
+    
+    - name: Add mongodb repos
+      block:
+        - name: Add mongodb gpg key
+          ansible.builtin.get_url:
+            url:
+            dest:
+        - name: Add mongodb repo
+          ansible.builtin.apt_repository:
+            repo:
+            state: present
 
     - name: Add Unifi repos
-      ansible.builtin.shell:
-        cmd: echo 'deb https://www.ui.com/downloads/unifi/debian stable ubiquiti' | tee /etc/apt/sources.list.d/100-ubnt-unifi.list
-    
-    - name: Add Unifi GPG keys
-      ansible.builtin.shell:
-        cmd: apt-key adv --keyserver keyserver.ubuntu.com --recv 06E85760C0A52C50 
+      block:
+      - name: Add gpg key
+        ansible.builtin.get_url:
+          url: "https://dl.ui.com/unifi/unifi-repo.gpg"
+          dest: /etc/apt/trusted.gpg.d/unifi-repo.gpg
+        
+      - name: Add repo
+        ansible.builtin.apt_repository:
+          repo: 'deb https://www.ui.com/downloads/unifi/debian stable ubiquiti'
+          state: present
 
     - name: Install Unifi Controller
-      apt:
+      ansible.builtin.apt:
         update_cache: yes
         name: unifi
         state: present
-    
+
+    - name: Enable Unifi Service
+      ansible.builtin.service:
+        name: unifi
+        state: started
+        enabled: true
+
     - name: Change Hostname
       hostname:
         name: unifi-controller
-
 ...

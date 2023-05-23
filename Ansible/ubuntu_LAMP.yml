@@ -12,7 +12,6 @@
     - name: Install Needed Packages
       apt:
         pkg:
-        - xe-guest-utilities
         - apache2
         - mysql-server
         - php
