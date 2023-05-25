@@ -1,0 +1,14 @@
+---
+# vars file for dnsmasq-server
+dnsmasq_config: '/etc/dnsmasq.conf'
+dnsmasq_source: 'files/dnsmasq.conf'
+resolv_config: '/etc/resolv.conf'
+resolv_source: 'files/resolv.conf'
+hosts_config: '/etc/hosts'
+hosts_source: 'files/hosts'
+interfaces_config: '/etc/network/interfaces'
+interfaces_source: 'files/interfaces'
+blocklist_update_dest: '/opt/blocklist_update.sh'
+blocklist_update_src: 'files/blocklist_update.sh'
+blocklist_url: 'https://github.com/notracking/hosts-blocklists/raw/master/dnsmasq/dnsmasq.blacklist.txt'
+blocklist_path: "/opt/dnsmasq.blacklist.txt"

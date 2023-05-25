@@ -1,27 +1,42 @@
 ---
 # tasks file for sentinelone
-- name: Update DNF cache
-  ansible.builtin.dnf:
-    update_cache: true
-  when: ansible_facts["ansible_os_family"] == "RedHat"
-
-- name: Update apt cache
-  ansible.builtin.apt:
-    update_cache: true
-    cache_valid_time: 3600
-  when: ansible_facts["ansible_os_family"] == "Debian"
-
-- name: Install available updates (RH)
-  ansible.builtin.dnf:
-    name: "*"
-    state: present
-  when: ansible_facts["ansible_os_family"] == "RedHat"
-
-- name: Install available updates (Debian)
-  ansible.builtin.apt:
-    upgrade: true
-  when: ansible_facts["ansible_os_family"] == "Debian"
-
-- name: Copy installer to server
+- name: Copy installer to server (RH)
   ansible.builtin.copy:
-    src: tools
+    src: files/{{ rh_installer }}
+    dest: /tmp
+    mode: '0644'
+  when: ansible_facts["os_family"] == "RedHat"
+
+- name: Copy installer to server (Debian)
+  ansible.builtin.copy:
+    src: files/{{ deb_installer }}
+    dest: /tmp
+    mode: '0644'
+  when: ansible_facts["os_family"] == "Debian"
+
+- name: Check if S1 is installed
+  ansible.builtin.stat:
+    path: /opt/sentinelone
+  register: s1_installed
+
+- name: Install Sentinelone (RH)
+  ansible.builtin.command: >
+    rpm -i /tmp/{{ rh_installer }} --nodigest
+  changed_when: not s1_installed.stat.exists
+  when: ansible_facts["os_family"] == "RedHat"
+
+- name: Install Sentinelone (Debian)
+  ansible.builtin.command: >
+    dpkg -i /tmp/{{ deb_installer }}
+  changed_when: not s1_installed.stat.exists
+  when: ansible_facts["os_family"] == "Debian"
+
+- name: Apply Sentinelone token
+  ansible.builtin.command: >
+    {{ sentinelone_dir }}/sentinelctl management token set {{ sentinelone_token }}
+
+- name: Restart Sentinelone service; enable on startup
+  ansible.builtin.service:
+    name: sentinelone
+    state: restarted
+    enabled: true

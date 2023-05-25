@@ -1,0 +1,9 @@
+source /etc/network/interfaces.d/*
+
+auto lo
+iface lo inet loopback
+
+allow-hotplug enp1s0
+iface enp1s0 inet static
+    address <hostaddress/CIDR>
+    gateway <gateway address>
