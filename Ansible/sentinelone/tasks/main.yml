@@ -1,0 +1,27 @@
+---
+# tasks file for sentinelone
+- name: Update DNF cache
+  ansible.builtin.dnf:
+    update_cache: true
+  when: ansible_facts["ansible_os_family"] == "RedHat"
+
+- name: Update apt cache
+  ansible.builtin.apt:
+    update_cache: true
+    cache_valid_time: 3600
+  when: ansible_facts["ansible_os_family"] == "Debian"
+
+- name: Install available updates (RH)
+  ansible.builtin.dnf:
+    name: "*"
+    state: present
+  when: ansible_facts["ansible_os_family"] == "RedHat"
+
+- name: Install available updates (Debian)
+  ansible.builtin.apt:
+    upgrade: true
+  when: ansible_facts["ansible_os_family"] == "Debian"
+
+- name: Copy installer to server
+  ansible.builtin.copy:
+    src: tools
