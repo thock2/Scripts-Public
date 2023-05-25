@@ -9,7 +9,6 @@ This script will do the following:
     * job_title
     * email
     * Department
-    * Office
 2. Use the provided information to create the DisplayName
 3. Define the temp password for the user
 .PARAMETER user_document
@@ -20,18 +19,14 @@ azure-newuser.ps1 -user_document file.csv -temp_password 'hunter2'
 
 [CmdletBinding()]
 param (
-    [Parameter(ValueFromPipeline = $True,
-        Mandatory = $true)]
+    [Parameter(Mandatory = $true)]
     [Alias('CSV')]
-    [string[]]$user_document,
-
-    [Parameter(Mandatory = $True)]
-    [Alias('password')]
-    [SecureString]$temp_password
+    [string]$user_document
 )
-Connect-AzureAD
-$user_info = Import-Csv $user_document
+#permissions needed to make new user?
+Connect-MgGraph -Scopes 
 
+#how are we creating the password?
 function azure_password {
     $PasswordProfile = New-Object -TypeName Microsoft.Open.AzureAD.Model.PasswordProfile
     $PasswordProfile.Password = $Password
@@ -39,12 +34,25 @@ function azure_password {
     $PasswordProfile.ForceChangePasswordNextLogin = $true
 }
 
-
-foreach ($user in $user_info) {
-    $DisplayName = $user.first_name + " " + $user.last_name
-    New-AzureADUser -DisplayName $DisplayName -PasswordProfile azure_password -UserPrincipalName $user.email `
-        -AccountEnabled $true -PhysicalDeliveryOfficeName $user.office -JobTitle $user.job_title -Department $user.department `
-        -GivenName $user.last_name -Surname $user.first_name -UsageLocation US
+function add-users ($csv) {
+    $import = Import-Csv -Path $csv
+    foreach ($user in $import) {
+        $DisplayName = $user.first_name + " " + $user.last_name
+        $argtable = @{
+            "DisplayName"       = $DisplayName 
+            "PasswordProfile"   = azure_password
+            "UserPrincipalName" = $user.email
+            "AccountEnabled"    = $true 
+            "JobTitle"          = $user.job_title
+            "Department"        = $user.department
+            "GivenName"         = $user.last_name
+            "Surname"           = $user.first_name
+            "UsageLocation"     = 'US'
+        }
+        New-MgUser @argtable
+    }
 }
 
-Disconnect-AzureAD -Confirm:$false
+add-users -csv $user_document
+
+Disconnect-MgGraph

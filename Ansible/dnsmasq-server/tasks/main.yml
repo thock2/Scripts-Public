@@ -1,0 +1,96 @@
+---
+# tasks file for dnsmasq-server
+- name: Install applications
+  ansible.builtin.apt:
+    pkg:
+      - tmux
+      - vim
+      - rsync
+      - iotop
+      - curl
+      - ufw
+      - git
+      - net-tools
+      - smartmontools
+      - lm-sensors
+      - dnsmasq
+      - htop
+      - fwupd
+
+- name: Install dnsmasq.conf
+  ansible.builtin.copy:
+    src: '{{ dnsmasq_source }}'
+    dest: '{{ dnsmasq_config }}'
+    remote_src: false
+    owner: root
+    group: root
+    mode: '0644'
+
+- name: Install resolv.conf
+  ansible.builtin.copy:
+    src: '{{ resolv_source }}'
+    dest: '{{ resolv_config }}'
+    remote_src: false
+    owner: root
+    group: root
+    mode: '0644'
+
+- name: Install /etc/hosts
+  ansible.builtin.copy:
+    src: '{{ hosts_source }}'
+    dest: '{{ hosts_config }}'
+    remote_src: false
+    owner: root
+    group: root
+    mode: '0644'
+
+- name: Install /etc/network/interfaces
+  ansible.builtin.copy:
+    src: '{{ interfaces_source }}'
+    dest: '{{ interfaces_config }}'
+    remote_src: false
+    owner: root
+    group: root
+    mode: '0644'
+
+- name: Install Blocklist update script
+  ansible.builtin.copy:
+    src: '{{ blocklist_update_src }}'
+    dest: '{{ blocklist_update_dest }}'
+    remote_src: false
+    owner: root
+    group: root
+    mode: '0755'
+
+- name: Add blocklist update cron job
+  ansible.builtin.cron:
+    name: "Update Blocklist"
+    minute: "0"
+    hour: "0"
+    job: "{{ blocklist_update_dest }}"
+
+- name: Download Blocklist
+  ansible.builtin.get_url:
+    url: "{{ blocklist_url }}"
+    dest: "{{ blocklist_path }}"
+    mode: '0440'
+
+- name: UFW allow DHCP
+  community.general.ufw:
+    rule: "allow"
+    name: 'DNS'
+
+- name: UFW allow DHCP
+  community.general.ufw:
+    rule: "allow"
+    port: " {{ item }}"
+    proto: "udp"
+  with_items:
+    - "67"
+    - "68"
+
+- name: Enable dnsmasq service
+  ansible.builtin.service:
+    name: dnsmasq
+    state: started
+    enabled: true

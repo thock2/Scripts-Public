@@ -1,0 +1,14 @@
+galaxy_info:
+  author: Terrance Hockless
+  description: Installs dnsmasq and configures DNS w/ adblocking
+  company: tjhockless.com
+  role_name: dnsmasq_server
+
+  license: BSD-3-Clause
+
+  min_ansible_version: '2.1'
+
+  platforms:
+    - name: Debian
+      versions:
+        - bullseye

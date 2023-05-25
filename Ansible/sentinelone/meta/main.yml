@@ -1,0 +1,15 @@
+galaxy_info:
+  author: Terrance Hockless
+  description: Installs SentinelOne on Debian and RH based Linux servers
+  license: BSD-3-Clause
+
+  min_ansible_version: "2.1"
+
+  platforms:
+   - name: Debian
+     versions: 
+      - bullseye
+   - name: EL
+     versions:
+      - "8"
+      - "9"

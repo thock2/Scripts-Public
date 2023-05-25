@@ -1,0 +1,6 @@
+---
+# vars file for sentinelone
+sentinelone_token: ''
+sentinelone_dir: "/opt/sentinelone/bin"
+rh_installer: "SentinelAgent-linux-v22-3-1-7-x86-64_linux_v22_3_1_7.rpm"
+deb_installer: "SentinelAgent-linux-v22-3-1-7-x86-64_linux_v22_3_1_7.deb"
