@@ -29,33 +29,34 @@ param (
 )
 
 Begin {
-    $key1 = "PromptOOMSend"
-    $key2 = "AdminSecurityMode"
-    $key3 = "PromptOOMAddressInformationAccess"
-    $key4 = "PromptOOMAddressBookAccess"
+    # Define keys + Values
+    $registry_keys = @{
+        "PromptOOMSend"                     = 2;
+        "AdminSecurityMode"                 = 3;
+        "PromptOOMAddressInformationAccess" = 2;
+        "PromptOOMAddressBookAccess"        = 2
+    }
+    # Collect User SID(s)
+    $user_SIDS = [System.Collections.Generic.List[string]]::new()
+    foreach ($user in $username) {
+        $sid = Get-CimInstance -classname Win32_UserProfile | Where-Object -Property LocalPath -eq "C:\Users\$user" | Select-Object -ExpandProperty SID
+        $user_SIDS.Add($sid)
+    }
 }
 
 Process {
-    foreach ($account in $username) {
-        # Get SID
-        $user_SID = Get-CimInstance -classname Win32_UserProfile | Where-Object -Property LocalPath -eq "C:\Users\$account" | Select-Object -ExpandProperty SID
+    foreach ($user in $user_SIDS) {
         # Define User Registry Hive Path
         $key_path = "REGISTRY::HKEY_Users\$user_SID\Software\Policies\Microsoft\Office\16.0\Outlook\Security"
         # Check for existing keys
         $key_path_exists = Test-Path -Path $key_path
-        $key_root = "REGISTRY::HKEY_Users\$user_SID\Software\Policies\Microsoft\"
         if ($key_path_exists -eq $false) {        
-            # Create New Key Tree. Is there really no equivalent to "mkdir -p"?
-            New-Item -Path $key_root -Name Office -ItemType Directory -ErrorAction Stop
-            New-Item -Path $key_root\Office -Name 16.0 -ItemType Directory -ErrorAction Stop
-            New-Item -Path $key_root\Office\16.0 -Name Outlook -ItemType Directory -ErrorAction Stop
-            New-Item -Path $key_root\Office\16.0\Outlook -Name Security -ItemType Directory -ErrorAction Stop
+            New-Item -Path $key_path -ItemType Directory -Force -ErrorAction Stop
         }
         # Set Subkey Values 1-4
-        Set-ItemProperty -Path $key_path -Name $key1 -Value 2 -ErrorAction Stop
-        Set-ItemProperty -Path $key_path -Name $key2 -Value 3 -ErrorAction Stop
-        Set-ItemProperty -Path $key_path -Name $key3 -Value 2 -ErrorAction Stop
-        Set-ItemProperty -Path $key_path -Name $key4 -Value 2 -ErrorAction Stop
+        foreach ($key in $registry_keys.GetEnumerator()) {
+            Set-ItemProperty -Path $key_path -Name $key.Key -Value $key.Value -ErrorAction Stop
+        }
     }
 
 }
