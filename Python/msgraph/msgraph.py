@@ -32,7 +32,7 @@ def get_graphtoken():
 
 def disable_azureaccount(userprincipalname):
     # Get auth token/headers
-    token = get_graphtoken(client_secret, tenant_id, client_id)
+    token = get_graphtoken()
     endpoints = [
         f"https://graph.microsoft.com/beta/users/{userprincipalname}/invalidateAllRefreshTokens",
         f"https://graph.microsoft.com/beta/users/{userprincipalname}/revokeSignInSessions",
@@ -65,7 +65,7 @@ def assign_license(license_type, *userprincipalname):
 
     else:
         # get token
-        token = get_graphtoken(client_secret, tenant_id, client_id)
+        token = get_graphtoken()
         # iterate through users and assign license
         for user in userprincipalname:
             # License assignment endpoint
@@ -82,7 +82,7 @@ def assign_license(license_type, *userprincipalname):
 
 def remove_licenses(*userprincipalname):
     # Get auth token
-    token = get_graphtoken(client_secret, tenant_id, client_id)
+    token = get_graphtoken()
     # iterate through users
     for user in userprincipalname:
         # Get all licenses assigned to user
@@ -102,7 +102,7 @@ def remove_licenses(*userprincipalname):
 
 def send_email(from_address, to_address, subject, body, attachment=None):
     # Get token
-    token = get_graphtoken(client_secret, tenant_id, client_id)
+    token = get_graphtoken()
     # define sender uri
     sender_uri = f"https://graph.microsoft.com/v1.0/users/{from_address}/sendMail"
     # create message body
@@ -122,7 +122,7 @@ def send_email(from_address, to_address, subject, body, attachment=None):
 
 def send_email_2(from_address, to_address, subject, body, attachment=None):
     # Get token
-    token = get_graphtoken(client_secret, tenant_id, client_id)
+    token = get_graphtoken()
     # define sender uri
     sender_uri = f"https://graph.microsoft.com/v1.0/users/{from_address}/sendMail"
     # create message body
