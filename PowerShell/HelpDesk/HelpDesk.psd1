@@ -55,6 +55,7 @@
         'Add-Licenses',
         'Remove-Licenses',
         'Remove-ADGroupMemberShip',
+        'Remove-AzureGroupMemberShip',
         'Set-MailboxForwarding',
         'Set-DirectReport',
         'Set-NewLastName',

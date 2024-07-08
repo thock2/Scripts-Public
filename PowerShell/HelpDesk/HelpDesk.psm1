@@ -464,7 +464,7 @@ function Add-Licenses {
                     Set-MgUserLicense -UserId $userID -AddLicenses @{SkuID = $E3SKU.SkuId } -RemoveLicenses @() -ErrorAction Stop
                 }
                 Catch {
-                    Write-Information $error[0].ErrorDetails
+                    Write-Error $error[0].ErrorDetails
                 }
             }
             #Assign M365 Business Essentials
@@ -475,7 +475,7 @@ function Add-Licenses {
                     Set-MgUserLicense -UserId $userID -AddLicenses @{SkuID = $essential_sku.SkuId } -RemoveLicenses @() -ErrorAction Stop
                 }
                 Catch {
-                    Write-Information $error[0].ErrorDetails
+                    Write-Error $error[0].ErrorDetails
                 }
             }
             # Assign NAV BC Team Member
@@ -486,7 +486,7 @@ function Add-Licenses {
                     Set-MgUserLicense -UserId $userID -AddLicenses @{SkuID = $bc_team_sku.SkuId } -RemoveLicenses @() -ErrorAction Stop
                 }
                 Catch {
-                    Write-Information $error[0].ErrorDetails
+                    Write-Error $error[0].ErrorDetails
                 }
             }
         }
@@ -605,7 +605,15 @@ function Set-NewLastName {
     PROCESS {
         if ($update_lastname) {
             # Update just last name
-            Set-ADUser -Identity $username -Surname $new_last_name_format -DisplayName $new_fullname
+            Try {
+                Set-ADUser -Identity $username -Surname $new_last_name_format -DisplayName $new_fullname
+                $new_user_properties = Get-ADUser -Identity $username
+                Write-Output "We have updated the following properties for $($user_properties.SamAccountName):
+                    `nSurname has been changed from $($user_properties.Surname) to $($new_user_properties.Surname)"
+            }
+            catch {
+                Write-Error $error[0].ErrorDetails -ErrorAction Stop
+            }
         }
         if ($update_emailaddress) {
             #Update UPN, SamAccountName, Email Address, ProxyAddresses
@@ -618,26 +626,21 @@ function Set-NewLastName {
                 }
             }
             # Set Properties
-            Set-ADUser -Identity $username @property_updates
+            try {
+                Set-ADUser -Identity $username @property_updates
+                $new_user_properties = Get-ADUser -Identity $new_username -Properties ProxyAddresses, EmailAddress
+                Write-Output "We have updated the following properties for $($user_properties.SamAccountName): 
+                    `nUserPrincipalName/E-Mail Address has been changed from $($user_properties.UserPrincipalName) to $($new_user_properties.UserPrincipalName)
+                    `nSamAccountName has been changed from $($user_properties.SamAccountName) to $($new_user_properties.SamAccountName)
+                    `nProxy Addresses have been added to preserve the previous E-mail address. Those are: `n$($property_updates.Add.Values)"
+            }
+            catch {
+                Write-Error $error[0].ErrorDetails -ErrorAction Stop
+            }
         }
     }
 
-    END {
-        # Get updated properties, Display changes
-        if ($update_lastname) {
-            $user_properties_updated = Get-ADUser -Identity $username
-            Write-Output "We have updated the following properties for $($user_properties.SamAccountName):"
-            Write-Output "`nSurname has been changed from $($user_properties.Surname) to $($user_properties_updated.Surname)"
-        }
-        if ($update_emailaddress) {
-            $user_properties_updated = Get-ADUser -Identity $new_username -Properties ProxyAddresses, EmailAddress
-            Write-Output "We have updated the following properties for $($user_properties.SamAccountName):"
-            Write-Output "`nUserPrincipalName/E-Mail Address has been changed from $($user_properties.UserPrincipalName) to $($user_properties_updated.UserPrincipalName)"
-            Write-Output "`nSamAccountName has been changed from $($user_properties.SamAccountName) to $($user_properties_updated.SamAccountName)"
-            Write-Output "`nProxy Addresses have been added to preserve the previous E-mail address. Those are: `n$($property_updates.Add.Values)"
-
-        }
-    }
+    END {}
     
 }
 function Get-BitlockerRecoveryKey {

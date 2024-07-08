@@ -1,6 +1,9 @@
 import requests
 import json
 import configparser
+import base64
+import os
+from pathlib import Path
 
 def get_graphtoken():
     # Import secret,ids from credentials.ini
@@ -100,7 +103,7 @@ def remove_licenses(*userprincipalname):
             )
 
 
-def send_email(from_address, to_address, subject, body, attachment=None):
+def send_email(from_address, to_address, subject, body):
     # Get token
     token = get_graphtoken()
     # define sender uri
@@ -117,14 +120,21 @@ def send_email(from_address, to_address, subject, body, attachment=None):
     message_send = requests.post(
         sender_uri, headers=token, data=json.dumps(message_body)
     )
-    print(message_send.text)
 
 
-def send_email_2(from_address, to_address, subject, body, attachment=None):
+def send_email_attachment(from_address, to_address, subject, body, attachment=None):
     # Get token
     token = get_graphtoken()
     # define sender uri
     sender_uri = f"https://graph.microsoft.com/v1.0/users/{from_address}/sendMail"
+    # Get attachment properties
+    #working_directory = Path(__file__).absolute().parent
+    attachment_name = os.path.basename(attachment)
+    # convert attachment to base64 string
+    with open(attachment,'rb') as file_attachment:
+        base64_enc = base64.b64encode(file_attachment.read())
+        base64_string = base64_enc.decode()
+
     # create message body
     message_body = {
         "message": {
@@ -134,16 +144,19 @@ def send_email_2(from_address, to_address, subject, body, attachment=None):
             "attachments": [
                 {
                     "@odata.type": "#microsoft.graph.fileAttachment",
-                    "name": "",
-                    "contentType": "",
-                    "contentBytes": "",
+                    "name": attachment_name,
+                    "contentType": "text/plain",
+                    "contentBytes": base64_string
                 }
-            ],
-            "saveToSentItems": "true",
+            ]
         }
     }
     # send e-mail
-    message_send = requests.post(
-        sender_uri, headers=token, data=json.dumps(message_body)
-    )
-    print(message_send.text)
+    try:
+        message_send = requests.post(
+            sender_uri, headers=token, data=json.dumps(message_body)
+        )
+    except:
+        raise
+    else:
+        print(message_send.text)
