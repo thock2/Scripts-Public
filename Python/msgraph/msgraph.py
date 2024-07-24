@@ -152,11 +152,4 @@ def send_email_attachment(from_address, to_address, subject, body, attachment=No
         }
     }
     # send e-mail
-    try:
-        message_send = requests.post(
-            sender_uri, headers=token, data=json.dumps(message_body)
-        )
-    except:
-        raise
-    else:
-        print(message_send.text)
+    message_send = requests.post(sender_uri, headers=token, data=json.dumps(message_body))

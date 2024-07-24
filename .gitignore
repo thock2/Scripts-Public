@@ -1,3 +1,6 @@
 Python/msgraph/credentials.ini
 Python/msgraph/__pycache__/*
 Python/msgraph/test.py
+Terraform/*.tfstate
+Terraform/.terraform
+Terraform/*.tfstate.backup
