@@ -6,7 +6,7 @@ BEGIN {
         Write-Information "Exchange Online Session Detected, skipping connect phase"
     }
     else {
-        Connect-ExchangeOnline
+        Connect-ExchangeOnline -SkipLoadingFormatData
     }
 
 }
